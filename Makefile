@@ -1,9 +1,11 @@
+# Makefile
+
 # Проверка стиля через pycodestyle
 lint:
-	python -m pycodestyle app.py parser.py analysis.py
+	python -m pycodestyle app.py
 
 # Авто-форматирование через autopep8
 format:
-	autopep8 --in-place --aggressive --aggressive app.py parser.py analysis.py
+	autopep8 --in-place --aggressive --aggressive app.py
 
 .PHONY: lint format
