@@ -1,8 +1,6 @@
 lint:
 	python -m pycodestyle --max-line-length=140 *.py
 
-# Авто-форматирование через black
 format:
-	black .
+	python -m autopep8 --in-place --aggressive --aggressive *.py
 .PHONY: lint format
-
