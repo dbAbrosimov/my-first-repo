@@ -1,10 +1,7 @@
 import streamlit as st
 import io
 import logging
-import csv
-import pandas as pd
 import plotly.express as px
-import re
 
 from db import init_db, fetch_metrics, update_metric
 from parser import load_data, get_types

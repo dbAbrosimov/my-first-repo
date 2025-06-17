@@ -1,5 +1,4 @@
 import streamlit as st
-import io
 from io import BytesIO
 from lxml import etree
 from datetime import datetime
