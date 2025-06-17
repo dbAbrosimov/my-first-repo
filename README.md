@@ -2,6 +2,13 @@
 
 This repository contains a Streamlit app for analyzing Apple Health data.
 
+The application is configured to accept XML exports up to **1 GB**.
+
+Metric groups and aggregation methods are stored in a local SQLite database
+(`metrics.db`). You can edit them in the sidebar expander "Управление
+метриками".
+
+
 ## Linting
 
 To check code style with PEP8 using `pycodestyle`, run:
