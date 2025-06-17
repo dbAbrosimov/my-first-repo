@@ -56,6 +56,7 @@ def compute_delta_optx(wide_df, pairs_df):
         thresh = 0.95 * series[Y].max()
         xs = series[X][series[Y] >= thresh]
         optx_list.append(xs.min() if not xs.empty else None)
+
     pairs_df['ΔY'] = delta_list
     pairs_df['OptX'] = optx_list
     return pairs_df

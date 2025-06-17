@@ -4,3 +4,4 @@ repos:
     hooks:
       - id: pycodestyle
         args: [app.py, parser.py, analysis.py]
+
