@@ -1,7 +1,6 @@
 # My First Repo
 
 This repository contains a Streamlit app for analyzing Apple Health data.
-The application is configured to accept XML exports up to **1 GB**.
 
 ## Linting
 
