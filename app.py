@@ -1,42 +1,36 @@
 import streamlit as st
-from io import BytesIO
 import io
-from lxml import etree
-from datetime import datetime, timedelta
-from collections import defaultdict
-import scipy.stats as ss
-import plotly.express as px
-import numpy as np
 import logging
-import traceback
-import statistics
-import pandas as pd
-import re
+import plotly.express as px
+
+from db import init_db, fetch_metrics, update_metric
+from parser import load_data, get_types
+from analysis import (
+    prepare_table,
+    analyze_pairs,
+    compute_delta_optx,
+    pretty,
+)
+
 logging.basicConfig(level=logging.DEBUG)
-
-import csv
-
-import io
 
 # Expand page width
 st.set_page_config(layout="wide")
 
-# Sidebar: upload group mapping CSV
-mapping_upload = st.sidebar.file_uploader(
-    "Загрузите mapping CSV (Metric_to_Group_Mapping.csv)",
-    type="csv", key="mapping"
-)
-# Load static mapping from uploaded file or fallback
-group_mapping = {}
-if mapping_upload is not None:
-    reader = csv.DictReader(io.StringIO(mapping_upload.getvalue().decode('utf-8')))
-    for row in reader:
-        group_mapping[row['Metric']] = row['Group']
-else:
-    st.sidebar.warning("Файл mapping CSV не загружен — все метрики попадут в 'other'.")
+# Initialize database and load metric info
+init_db()
+metrics_df = fetch_metrics()
+
 
 def get_group(metric_pretty_name):
-    return group_mapping.get(metric_pretty_name, 'other')
+    row = metrics_df.loc[metrics_df['metric'] == metric_pretty_name]
+    if not row.empty:
+        return row.iloc[0]['group_name']
+    return 'other'
+
+
+def get_agg_rules():
+    return dict(zip(metrics_df['metric'], metrics_df['agg_func']))
 
 
 # buffer for in-app logs
@@ -48,102 +42,21 @@ logging.getLogger().addHandler(buffer_handler)
 # list for collecting debug messages
 log_messages = []
 
-
-# 1. Load raw XML into a DataFrame of (date, metric, value)
-def load_data(file_bytes):
-    records = []
-    for _, elem in etree.iterparse(BytesIO(file_bytes), tag='Record'):
-        t = elem.get('type')
-        start = elem.get('startDate')
-        if not t or not start:
-            elem.clear(); continue
-        dt = datetime.fromisoformat(start).date()
-        if t.endswith('SleepAnalysis'):
-            if elem.get('value') != 'HKCategoryValueSleepAnalysisAsleepDeep':
-                elem.clear(); continue
-            val = (datetime.fromisoformat(elem.get('endDate')) - datetime.fromisoformat(start)).total_seconds() / 60
-            records.append({'date': dt, 'metric': t, 'value': val})
-            # record bedtime (startDate hour+minute) as a separate metric
-            dt_start = datetime.fromisoformat(start)
-            bedtime_val = dt_start.hour * 60 + dt_start.minute
-            records.append({'date': dt_start.date(), 'metric': 'Bedtime', 'value': bedtime_val})
-            # record wake-up time (endDate hour+minute) as a separate metric
-            dt_end = datetime.fromisoformat(elem.get('endDate'))
-            wake_val = dt_end.hour * 60 + dt_end.minute
-            records.append({'date': dt_end.date(), 'metric': 'WakeTime', 'value': wake_val})
-        else:
-            try:
-                val = float(elem.get('value') or 0)
-            except:
-                val = 0
-            records.append({'date': dt, 'metric': t, 'value': val})
-        elem.clear()
-    return pd.DataFrame(records)
-
-# 2. Prepare pivot table aggregated by period
-from pandas import Grouper
-
-def prepare_table(df, period):
-    # map period levels
-    if period == 'Неделя':
-        df['period'] = df['date'] - pd.to_timedelta(df['date'].dt.weekday, unit='D')
-    elif period == 'Месяц':
-        df['period'] = df['date'].values.astype('datetime64[M]')
-    else:
-        df['period'] = df['date']
-    # metrics to average per period (sleep depths, body stats, variability)
-    mean_pattern = 'SleepAnalysis|Weight|BMI|Variability|HRV'
-    metric_means = df[df['metric'].str.contains(mean_pattern)]
-    metric_sums  = df[~df['metric'].str.contains(mean_pattern)]
-    pt_sum = metric_sums.pivot_table(
-        index='period', columns='metric', values='value', aggfunc='sum')
-    pt_mean = metric_means.pivot_table(
-        index='period', columns='metric', values='value', aggfunc='mean')
-    return pd.concat([pt_sum, pt_mean], axis=1).sort_index()
-
-# 3. Analyze all pairs vectorized
-from itertools import combinations
-
-def analyze_pairs(wide_df, p_thr, min_N):
-    results = []
-    metrics = wide_df.columns.dropna()
-    pairs = list(combinations(metrics, 2))
-    progress_bar = st.progress(0, text="Анализируем пары метрик...")
-    for idx, (X, Y) in enumerate(pairs):
-        series = wide_df[[X, Y]].dropna()
-        N = len(series)
-        if N < min_N:
-            progress_bar.progress((idx + 1) / len(pairs))
-            continue
-        # skip if no variation in X or Y
-        if series[X].nunique() < 2 or series[Y].nunique() < 2:
-            progress_bar.progress((idx + 1) / len(pairs))
-            continue
-        try:
-            res = ss.linregress(series[X], series[Y])
-        except ValueError:
-            progress_bar.progress((idx + 1) / len(pairs))
-            continue
-        if res.pvalue > p_thr:
-            progress_bar.progress((idx + 1) / len(pairs))
-            continue
-        results.append({'X': X, 'Y': Y, 'r': res.rvalue, 'p': res.pvalue, 'N': N})
-        progress_bar.progress((idx + 1) / len(pairs))
-    progress_bar.empty()
-    return pd.DataFrame(results).sort_values('p')
-
-@st.cache_data(show_spinner=False)
-def get_types(file_bytes):
-    """
-    Возвращает отсортированный список уникальных типов <Record> в файле.
-    """
-    types = set()
-    for _, elem in etree.iterparse(BytesIO(file_bytes), tag='Record'):
-        t = elem.get('type')
-        if t:
-            types.add(t)
-        elem.clear()
-    return sorted(types)
+with st.sidebar.expander('Управление метриками'):
+    metric_names = metrics_df['metric'].tolist()
+    if metric_names:
+        selected = st.selectbox('Метрика', metric_names)
+        current = metrics_df.set_index('metric').loc[selected]
+        new_group = st.selectbox(
+            'Группа',
+            ['activity', 'sleep', 'body', 'cardio', 'metabolism', 'workout', 'other'],
+            index=['activity', 'sleep', 'body', 'cardio', 'metabolism', 'workout', 'other'].index(current['group_name']) if current['group_name'] in ['activity', 'sleep', 'body', 'cardio', 'metabolism', 'workout', 'other'] else 0,
+        )
+        new_agg = st.selectbox('Агрегация', ['sum', 'mean'], index=0 if current['agg_func'] == 'sum' else 1)
+        if st.button('Сохранить изменения'):
+            update_metric(selected, new_group, new_agg)
+            metrics_df = fetch_metrics()
+            st.success('Обновлено')
 
 st.title("Health XML: корреляция метрик")
 
@@ -177,49 +90,15 @@ drop_same = st.sidebar.checkbox('Исключить пары из одной г�
 
 # Vectorized workflow
 raw_df = load_data(file_bytes)
-wide_df = prepare_table(raw_df, period)
-# determine min_N threshold: median N across all pairs or 10
-all_counts = []
-for X, Y in combinations(wide_df.columns, 2):
-    all_counts.append(len(wide_df[[X, Y]].dropna()))
-min_N = max(10, int(pd.Series(all_counts).median()))
+wide_df = prepare_table(raw_df, period, get_agg_rules())
+# determine min_N threshold: median observations per metric or 10
+min_N = max(10, int(wide_df.notna().sum().median()))
 pairs_df = analyze_pairs(wide_df, p_thr, min_N)
 
-# human-readable metric name
-def pretty(name):
-    # remove HealthKit prefix
-    base = re.sub(r'^HK(?:Category|Quantity)TypeIdentifier', '', name)
-    # split camel case
-    return re.sub(r'(?<!^)(?=[A-Z])', ' ', base).strip()
-
-
 if not pairs_df.empty:
-    df2 = pairs_df.copy()
-    # compute ΔY and Оптимальное X for each pair
-    delta_list = []
-    optx_list = []
-    for _, row in df2.iterrows():
-        X, Y = row['X'], row['Y']
-        # original metric names
-        orig_X = pairs_df.loc[_,'X']
-        orig_Y = pairs_df.loc[_,'Y']
-        series = wide_df[[orig_X, orig_Y]].dropna()
-        # ΔY: average period-to-period change
-        dy = series[orig_Y].diff().dropna()
-        delta_list.append(dy.mean())
-        # Оптимальное X: minimal X where Y>=95% of its max
-        thresh = 0.95 * series[orig_Y].max()
-        xs = series[orig_X][series[orig_Y] >= thresh]
-        optx_list.append(xs.min() if not xs.empty else None)
-    # assign
-    df2['ΔY'] = delta_list
-    df2['OptX'] = optx_list
-
-    # preserve original columns before mapping pretty names
-    df2['X_raw'] = df2['X']
-    df2['Y_raw'] = df2['Y']
-    df2['X'] = df2['X'].map(pretty)
-    df2['Y'] = df2['Y'].map(pretty)
+    df2 = compute_delta_optx(wide_df, pairs_df.copy())
+    df2['X'] = df2['X_raw'].map(pretty)
+    df2['Y'] = df2['Y_raw'].map(pretty)
     # format p-value to three decimal places
     def fmt_p(p):
         # format p-value to three decimal places
@@ -227,8 +106,8 @@ if not pairs_df.empty:
     df2['p'] = df2['p'].apply(fmt_p)
 
     if drop_same:
-        # keep only pairs where groups differ (using pretty names)
-        df2 = df2[df2.apply(lambda row: get_group(row['X']) != get_group(row['Y']), axis=1)].reset_index(drop=True)
+        diff_mask = df2['X'].map(get_group) != df2['Y'].map(get_group)
+        df2 = df2[diff_mask].reset_index(drop=True)
 
     # Поиск в таблице
     search = st.text_input('🔍 Поиск метрик (X или Y)', '')
@@ -241,14 +120,8 @@ if not pairs_df.empty:
 
     # Топ межгрупповых связей
     if st.sidebar.checkbox('Показать топ-5 межгрупповых связей по |r|', value=False):
-        # фильтруем пары из разных групп по pretty names
-        cross_mask = []
-        for _, row in df2.iterrows():
-            if get_group(row['X']) != get_group(row['Y']):
-                cross_mask.append(True)
-            else:
-                cross_mask.append(False)
-        cross_df = df2.loc[cross_mask].copy()
+        cross_mask = df2['X'].map(get_group) != df2['Y'].map(get_group)
+        cross_df = df2[cross_mask].copy()
         # сортируем по абсолютному r и берём топ-5
         cross_df['abs_r'] = cross_df['r'].abs()
         top5 = cross_df.sort_values('abs_r', ascending=False).head(5)
@@ -285,8 +158,14 @@ with st.expander("Интерактивное описание"):
         threshold = 0.95 * series[orig_Y].max()
         expected_benefit = threshold - mean_y
         st.write(f"Сейчас ваш средний **{row['X']}** ≈ {mean_x:.1f}.")
-        st.write(f"При увеличении до **{row['OptX']:.1f}** ваш средний **{row['Y']}** может вырасти примерно на {expected_benefit:.1f}.")
-        fig = px.scatter(series, x=orig_X, y=orig_Y,
-                         title=f"График зависимости {row['Y']} от {row['X']}",
-                         labels={orig_X: row['X'], orig_Y: row['Y']})
+        st.write(
+            f"При увеличении до **{row['OptX']:.1f}** ваш средний **{row['Y']}** может вырасти примерно на {expected_benefit:.1f}."
+        )
+        fig = px.scatter(
+            series,
+            x=orig_X,
+            y=orig_Y,
+            title=f"График зависимости {row['Y']} от {row['X']}",
+            labels={orig_X: row['X'], orig_Y: row['Y']}
+        )
         st.plotly_chart(fig, use_container_width=True)
