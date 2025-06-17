@@ -7,7 +7,6 @@ import plotly.express as px
 import re
 
 from db import init_db, fetch_metrics, update_metric
-
 from parser import load_data, get_types
 from analysis import (
     prepare_table,
@@ -25,11 +24,13 @@ st.set_page_config(layout="wide")
 init_db()
 metrics_df = fetch_metrics()
 
+
 def get_group(metric_pretty_name):
     row = metrics_df.loc[metrics_df['metric'] == metric_pretty_name]
     if not row.empty:
         return row.iloc[0]['group_name']
     return 'other'
+
 
 def get_agg_rules():
     return dict(zip(metrics_df['metric'], metrics_df['agg_func']))
@@ -97,7 +98,6 @@ wide_df = prepare_table(raw_df, period, get_agg_rules())
 min_N = max(10, int(wide_df.notna().sum().median()))
 pairs_df = analyze_pairs(wide_df, p_thr, min_N)
 
-
 if not pairs_df.empty:
     df2 = compute_delta_optx(wide_df, pairs_df.copy())
     df2['X'] = df2['X_raw'].map(pretty)
@@ -161,8 +161,14 @@ with st.expander("Интерактивное описание"):
         threshold = 0.95 * series[orig_Y].max()
         expected_benefit = threshold - mean_y
         st.write(f"Сейчас ваш средний **{row['X']}** ≈ {mean_x:.1f}.")
-        st.write(f"При увеличении до **{row['OptX']:.1f}** ваш средний **{row['Y']}** может вырасти примерно на {expected_benefit:.1f}.")
-        fig = px.scatter(series, x=orig_X, y=orig_Y,
-                         title=f"График зависимости {row['Y']} от {row['X']}",
-                         labels={orig_X: row['X'], orig_Y: row['Y']})
+        st.write(
+            f"При увеличении до **{row['OptX']:.1f}** ваш средний **{row['Y']}** может вырасти примерно на {expected_benefit:.1f}."
+        )
+        fig = px.scatter(
+            series,
+            x=orig_X,
+            y=orig_Y,
+            title=f"График зависимости {row['Y']} от {row['X']}",
+            labels={orig_X: row['X'], orig_Y: row['Y']}
+        )
         st.plotly_chart(fig, use_container_width=True)
