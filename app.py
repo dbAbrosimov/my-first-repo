@@ -50,9 +50,12 @@ with st.sidebar.expander('Управление метриками'):
         new_group = st.selectbox(
             'Группа',
             ['activity', 'sleep', 'body', 'cardio', 'metabolism', 'workout', 'other'],
-            index=['activity', 'sleep', 'body', 'cardio', 'metabolism', 'workout', 'other'].index(current['group_name']) if current['group_name'] in ['activity', 'sleep', 'body', 'cardio', 'metabolism', 'workout', 'other'] else 0,
+            index=['activity', 'sleep', 'body', 'cardio', 'metabolism', 'workout', 'other'].index(current['group_name']) 
+                  if current['group_name'] in ['activity', 'sleep', 'body', 'cardio', 'metabolism', 'workout', 'other'] 
+                  else 0,
         )
-        new_agg = st.selectbox('Агрегация', ['sum', 'mean'], index=0 if current['agg_func'] == 'sum' else 1)
+        new_agg = st.selectbox('Агрегация', ['sum', 'mean'],
+                               index=0 if current['agg_func'] == 'sum' else 1)
         if st.button('Сохранить изменения'):
             update_metric(selected, new_group, new_agg)
             metrics_df = fetch_metrics()
@@ -67,26 +70,37 @@ file_bytes = uploaded.read()
 
 types = get_types(file_bytes)
 
-
 st.sidebar.markdown("### Метрика X (день)")
 x_type = st.sidebar.selectbox(
-    "Ось X", types,
-    index=types.index("HKQuantityTypeIdentifierStepCount") if "HKQuantityTypeIdentifierStepCount" in types else 0
+    "Ось X",
+    types,
+    index=(
+        types.index("HKQuantityTypeIdentifierStepCount")
+        if "HKQuantityTypeIdentifierStepCount" in types
+        else 0
+    ),
 )
 
 st.sidebar.markdown("### Метрика Y (ночь)")
 y_type = st.sidebar.selectbox(
-    "Ось Y", types,
-    index=types.index("HKCategoryTypeIdentifierSleepAnalysis") if "HKCategoryTypeIdentifierSleepAnalysis" in types else 0
+    "Ось Y",
+    types,
+    index=(
+        types.index("HKCategoryTypeIdentifierSleepAnalysis")
+        if "HKCategoryTypeIdentifierSleepAnalysis" in types
+        else 0
+    ),
 )
 
 # Выбор периода агрегации
-period = st.sidebar.selectbox('Гранулярность', ['День', 'Неделя', 'Месяц'])
+period = st.sidebar.selectbox("Гранулярность", ["День", "Неделя", "Месяц"])
 # Порог p-value
-p_thr = st.sidebar.slider('Порог значимости p-value', min_value=0.01, max_value=0.1, value=0.05, step=0.01)
+p_thr = st.sidebar.slider(
+    "Порог значимости p-value", min_value=0.01, max_value=0.1, value=0.05, step=0.01
+)
 
 # Option to exclude trivial same-group pairs
-drop_same = st.sidebar.checkbox('Исключить пары из одной группы', value=True)
+drop_same = st.sidebar.checkbox("Исключить пары из одной группы", value=True)
 
 # Vectorized workflow
 raw_df = load_data(file_bytes)
@@ -99,34 +113,34 @@ if not pairs_df.empty:
     df2 = compute_delta_optx(wide_df, pairs_df.copy())
     df2['X'] = df2['X_raw'].map(pretty)
     df2['Y'] = df2['Y_raw'].map(pretty)
-    # format p-value to three decimal places
+
     def fmt_p(p):
-        # format p-value to three decimal places
         return f"{p:.3f}"
-    df2['p'] = df2['p'].apply(fmt_p)
+    df2["p"] = df2["p"].apply(fmt_p)
 
     if drop_same:
         diff_mask = df2['X'].map(get_group) != df2['Y'].map(get_group)
         df2 = df2[diff_mask].reset_index(drop=True)
 
     # Поиск в таблице
-    search = st.text_input('🔍 Поиск метрик (X или Y)', '')
+    search = st.text_input("🔍 Поиск метрик (X или Y)", "")
     if search:
-        mask = df2['X'].str.contains(search, case=False) | df2['Y'].str.contains(search, case=False)
+        mask = df2["X"].str.contains(search, case=False) | df2["Y"].str.contains(search, case=False)
         df_display = df2.loc[mask]
     else:
         df_display = df2
-    st.dataframe(df_display[['X','Y','r','p','ΔY','OptX','N']])
+    st.dataframe(df_display[["X", "Y", "r", "p", "ΔY", "OptX", "N"]])
 
     # Топ межгрупповых связей
     if st.sidebar.checkbox('Показать топ-5 межгрупповых связей по |r|', value=False):
         cross_mask = df2['X'].map(get_group) != df2['Y'].map(get_group)
         cross_df = df2[cross_mask].copy()
-        # сортируем по абсолютному r и берём топ-5
-        cross_df['abs_r'] = cross_df['r'].abs()
-        top5 = cross_df.sort_values('abs_r', ascending=False).head(5)
-        st.subheader('Топ-5 связей между разными группами')
-        st.dataframe(top5[['X','Y','r','p','N','ΔY','OptX']], use_container_width=True)
+        cross_df["abs_r"] = cross_df["r"].abs()
+        top5 = cross_df.sort_values("abs_r", ascending=False).head(5)
+        st.subheader("Топ-5 связей между разными группами")
+        st.dataframe(
+            top5[["X", "Y", "r", "p", "N", "ΔY", "OptX"]], use_container_width=True
+        )
 else:
     st.write("Нет значимых связей для выбранного порога p-value.")
 
@@ -137,7 +151,7 @@ with st.expander("Интерактивное описание"):
         min_value=0,
         max_value=len(df2) - 1 if not pairs_df.empty else 0,
         step=1,
-        value=0
+        value=0,
     )
     if not pairs_df.empty and 0 <= selected_row_index < len(df2):
         row = df2.iloc[selected_row_index]
@@ -148,11 +162,9 @@ with st.expander("Интерактивное описание"):
         st.write(f"**Количество наблюдений (N):** {row['N']}")
         st.write(f"**Среднее изменение ΔY:** {row['ΔY']:.3f}")
         st.write(f"**Оптимальное значение X (где Y >= 95% max):** {row['OptX']}")
-        # Plot scatter
-        orig_X = row['X_raw']
-        orig_Y = row['Y_raw']
+        orig_X = row["X_raw"]
+        orig_Y = row["Y_raw"]
         series = wide_df[[orig_X, orig_Y]].dropna()
-        # Compute and display average and expected benefit
         mean_x = series[orig_X].mean()
         mean_y = series[orig_Y].mean()
         threshold = 0.95 * series[orig_Y].max()
@@ -166,6 +178,6 @@ with st.expander("Интерактивное описание"):
             x=orig_X,
             y=orig_Y,
             title=f"График зависимости {row['Y']} от {row['X']}",
-            labels={orig_X: row['X'], orig_Y: row['Y']}
+            labels={orig_X: row['X'], orig_Y: row['Y']},
         )
         st.plotly_chart(fig, use_container_width=True)

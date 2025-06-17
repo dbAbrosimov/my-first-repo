@@ -17,8 +17,12 @@ def prepare_table(df, period, agg_rules):
     metric_means = df[df['metric'].isin(mean_metrics)]
     metric_sums = df[df['metric'].isin(sum_metrics)]
 
-    pt_sum = metric_sums.pivot_table(index='period', columns='metric', values='value', aggfunc='sum')
-    pt_mean = metric_means.pivot_table(index='period', columns='metric', values='value', aggfunc='mean')
+    pt_sum = metric_sums.pivot_table(
+        index='period', columns='metric', values='value', aggfunc='sum'
+    )
+    pt_mean = metric_means.pivot_table(
+        index='period', columns='metric', values='value', aggfunc='mean'
+    )
     return pd.concat([pt_sum, pt_mean], axis=1).sort_index()
 
 
@@ -39,7 +43,13 @@ def analyze_pairs(wide_df, p_thr, min_N):
             continue
         if res.pvalue > p_thr:
             continue
-        results.append({'X_raw': X, 'Y_raw': Y, 'r': res.rvalue, 'p': res.pvalue, 'N': N})
+        results.append({
+            'X_raw': X,
+            'Y_raw': Y,
+            'r': res.rvalue,
+            'p': res.pvalue,
+            'N': N
+        })
     return pd.DataFrame(results).sort_values('p')
 
 
@@ -62,7 +72,6 @@ def compute_delta_optx(wide_df, pairs_df):
 
 
 def pretty(name):
-    base = name
-    base = base.replace('HKCategoryTypeIdentifier', '')
-    base = base.replace('HKQuantityTypeIdentifier', '')
-    return ''.join([' ' + c if c.isupper() else c for c in base]).strip()
+    base = name.replace('HKCategoryTypeIdentifier', '').replace('HKQuantityTypeIdentifier', '')
+    pretty_name = ''.join(' ' + c if c.isupper() else c for c in base).strip()
+    return pretty_name
