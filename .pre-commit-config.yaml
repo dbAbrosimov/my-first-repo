@@ -1,0 +1,6 @@
+repos:
+  - repo: https://github.com/PyCQA/pycodestyle
+    rev: v2.11.0
+    hooks:
+      - id: pycodestyle
+        args: [app.py]
