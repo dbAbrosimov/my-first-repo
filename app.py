@@ -25,14 +25,14 @@ metrics_df = fetch_metrics()
 
 
 def get_group(metric_pretty_name):
-    row = metrics_df.loc[metrics_df['metric'] == metric_pretty_name]
+    row = metrics_df.loc[metrics_df["metric"] == metric_pretty_name]
     if not row.empty:
-        return row.iloc[0]['group_name']
-    return 'other'
+        return row.iloc[0]["group_name"]
+    return "other"
 
 
 def get_agg_rules():
-    return dict(zip(metrics_df['metric'], metrics_df['agg_func']))
+    return dict(zip(metrics_df["metric"], metrics_df["agg_func"]))
 
 
 # buffer for in-app logs
@@ -44,21 +44,44 @@ logging.getLogger().addHandler(buffer_handler)
 # list for collecting debug messages
 log_messages = []
 
-with st.sidebar.expander('Управление метриками'):
-    metric_names = metrics_df['metric'].tolist()
+with st.sidebar.expander("Управление метриками"):
+    metric_names = metrics_df["metric"].tolist()
     if metric_names:
-        selected = st.selectbox('Метрика', metric_names)
-        current = metrics_df.set_index('metric').loc[selected]
+        selected = st.selectbox("Метрика", metric_names)
+        current = metrics_df.set_index("metric").loc[selected]
         new_group = st.selectbox(
-            'Группа',
-            ['activity', 'sleep', 'body', 'cardio', 'metabolism', 'workout', 'other'],
-            index=['activity', 'sleep', 'body', 'cardio', 'metabolism', 'workout', 'other'].index(current['group_name']) if current['group_name'] in ['activity', 'sleep', 'body', 'cardio', 'metabolism', 'workout', 'other'] else 0,
+            "Группа",
+            ["activity", "sleep", "body", "cardio", "metabolism", "workout", "other"],
+            index=(
+                [
+                    "activity",
+                    "sleep",
+                    "body",
+                    "cardio",
+                    "metabolism",
+                    "workout",
+                    "other",
+                ].index(current["group_name"])
+                if current["group_name"]
+                in [
+                    "activity",
+                    "sleep",
+                    "body",
+                    "cardio",
+                    "metabolism",
+                    "workout",
+                    "other",
+                ]
+                else 0
+            ),
         )
-        new_agg = st.selectbox('Агрегация', ['sum', 'mean'], index=0 if current['agg_func'] == 'sum' else 1)
-        if st.button('Сохранить изменения'):
+        new_agg = st.selectbox(
+            "Агрегация", ["sum", "mean"], index=0 if current["agg_func"] == "sum" else 1
+        )
+        if st.button("Сохранить изменения"):
             update_metric(selected, new_group, new_agg)
             metrics_df = fetch_metrics()
-            st.success('Обновлено')
+            st.success("Обновлено")
 
 
 st.title("Health XML: корреляция метрик")
@@ -115,8 +138,8 @@ pairs_df = analyze_pairs(wide_df, p_thr, min_N)
 
 if not pairs_df.empty:
     df2 = compute_delta_optx(wide_df, pairs_df.copy())
-    df2['X'] = df2['X_raw'].map(pretty)
-    df2['Y'] = df2['Y_raw'].map(pretty)
+    df2["X"] = df2["X_raw"].map(pretty)
+    df2["Y"] = df2["Y_raw"].map(pretty)
 
     # format p-value to three decimal places
 
@@ -127,7 +150,7 @@ if not pairs_df.empty:
     df2["p"] = df2["p"].apply(fmt_p)
 
     if drop_same:
-        diff_mask = df2['X'].map(get_group) != df2['Y'].map(get_group)
+        diff_mask = df2["X"].map(get_group) != df2["Y"].map(get_group)
         df2 = df2[diff_mask].reset_index(drop=True)
 
     # Поиск в таблице
@@ -143,8 +166,8 @@ if not pairs_df.empty:
 
     # Топ межгрупповых связей
 
-    if st.sidebar.checkbox('Показать топ-5 межгрупповых связей по |r|', value=False):
-        cross_mask = df2['X'].map(get_group) != df2['Y'].map(get_group)
+    if st.sidebar.checkbox("Показать топ-5 межгрупповых связей по |r|", value=False):
+        cross_mask = df2["X"].map(get_group) != df2["Y"].map(get_group)
         cross_df = df2[cross_mask].copy()
         # сортируем по абсолютному r и берём топ-5
         cross_df["abs_r"] = cross_df["r"].abs()
@@ -192,6 +215,6 @@ with st.expander("Интерактивное описание"):
             x=orig_X,
             y=orig_Y,
             title=f"График зависимости {row['Y']} от {row['X']}",
-            labels={orig_X: row['X'], orig_Y: row['Y']}
+            labels={orig_X: row["X"], orig_Y: row["Y"]},
         )
         st.plotly_chart(fig, use_container_width=True)
