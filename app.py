@@ -6,6 +6,8 @@ import pandas as pd
 import plotly.express as px
 import re
 
+from db import init_db, fetch_metrics, update_metric
+
 from parser import load_data, get_types
 from analysis import (
     prepare_table,
@@ -19,22 +21,18 @@ logging.basicConfig(level=logging.DEBUG)
 # Expand page width
 st.set_page_config(layout="wide")
 
-# Sidebar: upload group mapping CSV
-mapping_upload = st.sidebar.file_uploader(
-    "Загрузите mapping CSV (Metric_to_Group_Mapping.csv)",
-    type="csv", key="mapping"
-)
-# Load static mapping from uploaded file or fallback
-group_mapping = {}
-if mapping_upload is not None:
-    reader = csv.DictReader(io.StringIO(mapping_upload.getvalue().decode('utf-8')))
-    for row in reader:
-        group_mapping[row['Metric']] = row['Group']
-else:
-    st.sidebar.warning("Файл mapping CSV не загружен — все метрики попадут в 'other'.")
+# Initialize database and load metric info
+init_db()
+metrics_df = fetch_metrics()
 
 def get_group(metric_pretty_name):
-    return group_mapping.get(metric_pretty_name, 'other')
+    row = metrics_df.loc[metrics_df['metric'] == metric_pretty_name]
+    if not row.empty:
+        return row.iloc[0]['group_name']
+    return 'other'
+
+def get_agg_rules():
+    return dict(zip(metrics_df['metric'], metrics_df['agg_func']))
 
 
 # buffer for in-app logs
@@ -45,6 +43,22 @@ logging.getLogger().addHandler(buffer_handler)
 
 # list for collecting debug messages
 log_messages = []
+
+with st.sidebar.expander('Управление метриками'):
+    metric_names = metrics_df['metric'].tolist()
+    if metric_names:
+        selected = st.selectbox('Метрика', metric_names)
+        current = metrics_df.set_index('metric').loc[selected]
+        new_group = st.selectbox(
+            'Группа',
+            ['activity', 'sleep', 'body', 'cardio', 'metabolism', 'workout', 'other'],
+            index=['activity', 'sleep', 'body', 'cardio', 'metabolism', 'workout', 'other'].index(current['group_name']) if current['group_name'] in ['activity', 'sleep', 'body', 'cardio', 'metabolism', 'workout', 'other'] else 0,
+        )
+        new_agg = st.selectbox('Агрегация', ['sum', 'mean'], index=0 if current['agg_func'] == 'sum' else 1)
+        if st.button('Сохранить изменения'):
+            update_metric(selected, new_group, new_agg)
+            metrics_df = fetch_metrics()
+            st.success('Обновлено')
 
 st.title("Health XML: корреляция метрик")
 
@@ -78,7 +92,7 @@ drop_same = st.sidebar.checkbox('Исключить пары из одной г�
 
 # Vectorized workflow
 raw_df = load_data(file_bytes)
-wide_df = prepare_table(raw_df, period)
+wide_df = prepare_table(raw_df, period, get_agg_rules())
 # determine min_N threshold: median observations per metric or 10
 min_N = max(10, int(wide_df.notna().sum().median()))
 pairs_df = analyze_pairs(wide_df, p_thr, min_N)

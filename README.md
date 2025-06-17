@@ -2,6 +2,10 @@
 
 This repository contains a Streamlit app for analyzing Apple Health data.
 
+Metric groups and aggregation methods are stored in a local SQLite database
+(`metrics.db`). You can edit them in the sidebar expander "Управление
+метриками".
+
 ## Linting
 
 To check code style with PEP8 using `pycodestyle`, run:

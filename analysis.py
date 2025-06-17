@@ -3,8 +3,8 @@ import scipy.stats as ss
 from itertools import combinations
 
 
-def prepare_table(df, period):
-    """Aggregate records by selected period."""
+def prepare_table(df, period, agg_rules):
+    """Aggregate records by selected period using metric-specific rules."""
     if period == 'Неделя':
         df['period'] = df['date'] - pd.to_timedelta(df['date'].dt.weekday, unit='D')
     elif period == 'Месяц':
@@ -12,9 +12,10 @@ def prepare_table(df, period):
     else:
         df['period'] = df['date']
 
-    mean_pattern = 'SleepAnalysis|Weight|BMI|Variability|HRV'
-    metric_means = df[df['metric'].str.contains(mean_pattern)]
-    metric_sums = df[~df['metric'].str.contains(mean_pattern)]
+    mean_metrics = [m for m, f in agg_rules.items() if f == 'mean']
+    sum_metrics = [m for m, f in agg_rules.items() if f == 'sum']
+    metric_means = df[df['metric'].isin(mean_metrics)]
+    metric_sums = df[df['metric'].isin(sum_metrics)]
 
     pt_sum = metric_sums.pivot_table(index='period', columns='metric', values='value', aggfunc='sum')
     pt_mean = metric_means.pivot_table(index='period', columns='metric', values='value', aggfunc='mean')
