@@ -1,0 +1,42 @@
+Metric,Group
+Active Energy Burned,metabolism
+Apple Exercise Time,activity
+Apple Sleeping Wrist Temperature,sleep
+Apple Stand Time,activity
+Apple Walking Steadiness,other
+Basal Energy Burned,metabolism
+Bedtime,sleep
+Body Fat Percentage,body
+Body Mass,body
+Body Mass Index,body
+Dietary Carbohydrates,metabolism
+Dietary Energy Consumed,metabolism
+Dietary Fat Total,metabolism
+Dietary Fiber,metabolism
+Dietary Protein,metabolism
+Distance Cycling,activity
+Distance Walking Running,activity
+Environmental Audio Exposure,other
+Environmental Sound Reduction,other
+Flights Climbed,activity
+Headphone Audio Exposure,other
+Heart Rate,cardio
+Heart Rate Variability S D N N,cardio
+Lean Body Mass,body
+Oxygen Saturation,cardio
+Physical Effort,activity
+Respiratory Rate,cardio
+Resting Heart Rate,cardio
+Sleep Analysis,sleep
+Stair Ascent Speed,activity
+Stair Descent Speed,activity
+Step Count,activity
+Time In Daylight,other
+V O2 Max,cardio
+Waist Circumference,body
+Wake Time,sleep
+Walking Asymmetry Percentage,other
+Walking Double Support Percentage,activity
+Walking Heart Rate Average,cardio
+Walking Speed,activity
+Walking Step Length,activity
